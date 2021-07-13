@@ -29,21 +29,27 @@ static int callback(void *data, int argc, char **argv, char **azColName){
 int main(int argc, char *argv[]) {
 
     bool to_make_db = false;
+    string path_to_db;
     bool to_make_a_search = false;
+    string path_to_names = argv[1];
+    string path_to_query;
 
     // Attributes parsing
-    for (int i = 1; i < argc; i++) {
+    for (int i = 2; i < argc; i++) {
         char a[] = "-d";
         char *attribute = a;
         int co = strcmp(argv[i], attribute);
         if (co == 0) {
             to_make_db = true;
+            path_to_db = argv[i + 1];
         }
         char a2[] = "-s";
         char *attribute2 = a2;
         co = strcmp(argv[i], attribute2);
         if (co == 0) {
             to_make_a_search = true;
+            path_to_query = argv[i + 1];
+            cout << path_to_query << endl;
         }
     }
 
@@ -66,19 +72,22 @@ int main(int argc, char *argv[]) {
     }
 
     // Open files
-    db.open("/home/ruslan/PycharmProjects/Hash_test/test_data/smu_db.fasta"); // simple db
+//    db.open("/home/ruslan/PycharmProjects/Hash_test/test_data/smu_db.fasta"); // simple db
 //    db.open("/home/ruslan/PycharmProjects/Hash_test/test_data/all_prokaryotes_ipg.fasta"); // big db
-    names.open("/home/ruslan/PycharmProjects/Hash_test/test_data/smu_ids.tsv"); // table id - protein
-    q.open("/home/ruslan/PycharmProjects/Hash_test/test_data/GCA_000829155.1.fasta"); // выборка
+//    names.open("/home/ruslan/PycharmProjects/Hash_test/test_data/smu_ids.tsv"); // table id - protein
+//    q.open("/home/ruslan/PycharmProjects/Hash_test/test_data/GCA_000829155.1.fasta"); // выборка
+
+
+    names.open(path_to_names); // table id - protein
 
     // Success if everything is open
-    if ((db) && (names) && (q)) {
-        fprintf(stdout, "Files opened successfully\n");
-    }
-    else {
-        fprintf(stderr, "Can't one or more files: %s\n", sqlite3_errmsg(sql_db));
-        return(0);
-    }
+//    if ((db) && (names) && (q)) {
+//        fprintf(stdout, "Files opened successfully\n");
+//    }
+//    else {
+//        fprintf(stderr, "Can't one or more files: %s\n", sqlite3_errmsg(sql_db));
+//        return(0);
+//    }
 
     // Read file "names" (id - protein)
     string line, field;
@@ -106,6 +115,7 @@ int main(int argc, char *argv[]) {
 
     // Option 1: Making and filling a database
     if (to_make_db) {
+        db.open(path_to_db); // simple db
         // Create a table in sql database
         sql = "CREATE TABLE HASHED("  \
       "ID INT PRIMARY KEY     NOT NULL," \
@@ -187,6 +197,7 @@ int main(int argc, char *argv[]) {
         cout << length_of_db << " proteins are successfully added to sql db\n";
 
         // Now we have an sql db
+        db.close();
     }
 
 
@@ -205,6 +216,8 @@ int main(int argc, char *argv[]) {
 
     // Option 2: Searching
     if (to_make_a_search) {
+        q.open(path_to_query); // выборка
+
         // Open the query file, preparing a set for the query
         set <string> st;
         string name, content;
@@ -278,6 +291,7 @@ int main(int argc, char *argv[]) {
             cout << *it_found << "\n";
         }
 
+        q.close();
         sqlite3_close(sql_db);
     }
 
