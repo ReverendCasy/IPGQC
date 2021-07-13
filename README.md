@@ -11,7 +11,7 @@ Given a full list of Identical Protein Group entries (IPGs) for a selected taxon
 
 `./<scriptname> -s <query>` - if the database is already built 
 
-Here, <database> refers to the FASTA file for selected taxon(-a) and <query> refers to protein content of genome assembly in question. For sequential launches of IPGQC with the same database, only the first use needs *-d* parameter specified.
+Here, `<database>` refers to the FASTA file for selected taxon(-a) and `<query>` refers to protein content of genome assembly in question. For sequential launches of IPGQC with the same database, only the first use needs *-d* parameter specified.
 **NOTE**: The current version does not support differential database use. If you switch to another database, the previous one will be overriden. This is to be fixed soon.
 ## Auxiliary scripts
 Script *IPG_stats_hists_upd.R* contains code used for figure production as presented at BiATA 2021 (Saint Petersburg, Russia, held online). The *scripts* directory contain Shell scripts used for genome assembly, respective IPG content and IPG statistics retrieval.
