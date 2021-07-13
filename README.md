@@ -18,7 +18,7 @@ Script *IPG_stats_hists_upd.R* contains code used for figure production as prese
 ## Expected updates
 The first major update is going to have the following features:
 1. Main script - database construction independent of query search; multithreading; multiple database handling for independent launches;
-2. Auxiliary scrips - a full suite for user-friendly IPG sequence and statistics retrieval.
+2. Auxiliary scripts - a full suite for user-friendly IPG sequence and statistics retrieval.
 ## Reference
 IPGQC has not been published. For project rationale, refer to the following abstract:
 Yury V. Malovichko, Ruslan O. Alagov, Anton E. Shikov, Alexander V. Predeus, Anton A. Nizhnikov, Kirill S. Antonets. Identical Protein Group content and resequencing statistics as a naive metric of biological assembly quality: An evaluation study and draft tool implementation. From abstract book: Bioinformatics: From Algorithms to Applications (BiATA). July 12-13, Saint Petersburg, Russia.
