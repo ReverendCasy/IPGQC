@@ -26,15 +26,16 @@ static int callback(void *data, int argc, char **argv, char **azColName){
 }
 
 // Func to create a database
-int make_db(string path, vector< vector<string> > id_pr, sqlite3 *sql_database) {
+int make_db(string path_db, string path_names, sqlite3 *sql_database) {
 
-    fstream db;
+    fstream db, names;
     char *sql, *zErrMsg = 0;
     int rc;
     vector<string> v;
-    string line;
+    vector< vector<string> > id_pr;
+    string line, field;
 
-    db.open(path); // simple db
+    db.open(path_db); // simple db
     // Create a table in sql database
     sql = "CREATE TABLE HASHED("  \
       "ID INT PRIMARY KEY     NOT NULL," \
@@ -48,6 +49,18 @@ int make_db(string path, vector< vector<string> > id_pr, sqlite3 *sql_database) 
     }
     else {
         fprintf(stdout, "Table created successfully\n");
+    }
+
+    names.open(path_names); // table id - protein
+
+    // Read file "names" (id - protein) and filling an array with that data
+    while (getline(names, line)) {
+        v.clear();
+        stringstream ss(line);
+        while (getline(ss,field,'\t')) { // break line into comma delimitted fields
+            v.push_back(field);  // add each field to the 1D array
+        }
+        id_pr.push_back(v);  // add the 1D array to the 2D array
     }
 
     // Read protein database file
@@ -211,7 +224,14 @@ int main(int argc, char *argv[]) {
 
     bool to_make_db = false, to_make_a_search = false;
     string path_to_names = argv[1], path_to_db, path_to_query;
-    fstream names;
+    fstream check_file;
+
+    check_file.open(path_to_names);
+    if (check_file.fail()) {
+        cout << "Invalid path to names file!" << endl;
+        return 0;
+    }
+    check_file.close();
 
     // Attributes parsing
     for (int i = 2; i < argc; i++) {
@@ -220,13 +240,24 @@ int main(int argc, char *argv[]) {
         if (co == 0) {
             to_make_db = true;
             path_to_db = argv[i + 1];
+            check_file.open(path_to_db);
+            if (check_file.fail()) {
+                cout << "Invalid path to database file!" << endl;
+                return 0;
+            }
+            check_file.close();
         }
         char a2[] = "-s", *attribute2 = a2;
         co = strcmp(argv[i], attribute2);
         if (co == 0) {
             to_make_a_search = true;
             path_to_query = argv[i + 1];
-            cout << path_to_query << endl;
+            check_file.open(path_to_query);
+            if (check_file.fail()) {
+                cout << "Invalid path to query file!" << endl;
+                return 0;
+            }
+            check_file.close();
         }
     }
 
@@ -245,24 +276,9 @@ int main(int argc, char *argv[]) {
         fprintf(stdout, "Sql database opened successfully\n");
     }
 
-    names.open(path_to_names); // table id - protein
-
-    // Read file "names" (id - protein) and filling an array with that data
-    string line, field;
-    vector< vector<string> > id_protein;  // the 2D array
-    vector<string> v;                // array of values for one line only
-    while (getline(names, line)) {
-        v.clear();
-        stringstream ss(line);
-        while (getline(ss,field,'\t')) { // break line into comma delimitted fields
-            v.push_back(field);  // add each field to the 1D array
-        }
-        id_protein.push_back(v);  // add the 1D array to the 2D array
-    }
-
     // Option 1: Making and filling a database
     if (to_make_db) {
-        make_db(path_to_db, id_protein, sql_db);
+        make_db(path_to_db, path_to_names, sql_db);
     }
 
     // Option 2: Searching
