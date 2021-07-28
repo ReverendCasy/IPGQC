@@ -44,7 +44,7 @@ int make_db(string path, vector< vector<string> > id_pr, sqlite3 *sql_database) 
     if (rc != SQLITE_OK) {
         fprintf(stderr, "SQL error: %s\n", zErrMsg);
         sqlite3_free(zErrMsg);
-        return(0);
+        return 0;
     }
     else {
         fprintf(stdout, "Table created successfully\n");
@@ -130,7 +130,7 @@ int make_search(string path, sqlite3 *sql_database) {
     int rc;
     string line;
 
-    q.open(path); // выборка
+    q.open(path); // query
 
     // Open the query file, preparing a set for the query
     set <string> st;
@@ -164,7 +164,7 @@ int make_search(string path, sqlite3 *sql_database) {
     }
 
     int counter = 0, total = 0;
-    set <string> st_found;
+    set <int> st_found;
     set <string> :: iterator it = st.begin();
 
     for (int i = 1; it != st.end(); i++, it++) {
@@ -173,14 +173,27 @@ int make_search(string path, sqlite3 *sql_database) {
         sql = &s[0];
         rc = sqlite3_exec(sql_database, sql, 0, 0, &zErrMsg);
         if (rc == false) {
-            st_found.insert(this_hash);
             counter++;
+
+            sqlite3_stmt *stmt;
+            string statement = "SELECT ID FROM HASHED WHERE HASH = '" + this_hash + "'";
+            rc = sqlite3_prepare_v2(sql_database, statement.c_str(), statement.length(), &stmt, nullptr);
+            if (rc != SQLITE_OK) {
+                // handle the error
+            }
+            // Loop through the results, a row at a time.
+            while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+                int sent = sqlite3_column_int(stmt, 0);
+                st_found.insert(sent);
+            }
+            // Free the statement when done.
+            sqlite3_finalize(stmt);
         }
 
         total = i;
     }
 
-    set <string> :: iterator it_found = st_found.begin();
+    set <int> :: iterator it_found = st_found.begin();
 
     cout << counter << " of " << total << " found in the database\n";
     cout << "The present IPGs are:\n";
@@ -226,7 +239,7 @@ int main(int argc, char *argv[]) {
     rc = sqlite3_open("hash_database.db", &sql_db);
     if (rc) {
         fprintf(stderr, "Can't open sql database: %s\n", sqlite3_errmsg(sql_db));
-        return(0);
+        return 0;
     }
     else {
         fprintf(stdout, "Sql database opened successfully\n");
@@ -234,7 +247,7 @@ int main(int argc, char *argv[]) {
 
     names.open(path_to_names); // table id - protein
 
-    // Read file "names" (id - protein)
+    // Read file "names" (id - protein) and filling an array with that data
     string line, field;
     vector< vector<string> > id_protein;  // the 2D array
     vector<string> v;                // array of values for one line only
@@ -246,16 +259,6 @@ int main(int argc, char *argv[]) {
         }
         id_protein.push_back(v);  // add the 1D array to the 2D array
     }
-
-    // Now we have an array id - protein
-
-    //    Print an array id - protein
-//    for (size_t i=0; i<id_protein.size(); ++i) {
-//        for (size_t j=0; j<id_protein[i].size(); ++j) {
-//            cout << id_protein[i][j] << ' ';
-//        }
-//        cout << "\n";
-//    }
 
     // Option 1: Making and filling a database
     if (to_make_db) {
