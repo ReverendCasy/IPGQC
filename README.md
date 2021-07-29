@@ -4,7 +4,7 @@ A working repository for Identical Protein Group content assessment tool.
 Given a full list of Identical Protein Group entries (IPGs) for a selected taxon and a query containing translated reading frames from a genome assembly, the tool a) hashes the reference file and populates the SQL database with the hashed entries, and b) hashes the query sequences 
 ## Use
 1. Download *Main.cpp*, *md5.cpp*, and *md5.h* scripts. (The other scripts in the current repository attest to IPG content assessment and do not affect the tool's performance)
-2. Compile *Main.cpp* as following: `g++ Main.cpp -lsqite3`;
+2. Compile *Main.cpp* as following: `g++ Main.cpp -lsqlite3`;
 4. Launch the compiled script as following: 
 
 `./<scriptname> <names> -d <database> -s <query>` - if script is run for the first time and no database is available 
