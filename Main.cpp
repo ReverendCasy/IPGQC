@@ -19,9 +19,9 @@ static int callback(void *data, int argc, char **argv, char **azColName){
 
     fprintf(stderr, "%s: ", (const char*)data);
 
-//    for(int i = 0; i<argc; i++){
-//        printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
-//    }
+    for (int i = 0; i<argc; i++) {
+        printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+    }
     return 0;
 }
 
@@ -63,6 +63,9 @@ int make_db(string path_db, string path_names, sqlite3 *sql_database) {
         id_pr.push_back(v);  // add the 1D array to the 2D array
     }
 
+    string s;
+    int num_of_inserts = 0;
+
     // Read protein database file
     string name, content;
     int length_of_db = 0;
@@ -83,9 +86,24 @@ int make_db(string path_db, string path_names, sqlite3 *sql_database) {
                 }
 
                 if (id != "NOT FOUND") {
-                    string s = "INSERT INTO HASHED (ID,HASH) VALUES (" + id +  ", '" + hashed_content + "'); ";
-                    sql = &s[0];
-                    rc = sqlite3_exec(sql_database, sql, callback, 0, &zErrMsg);
+                    if (num_of_inserts == 0) {
+                        s = "INSERT INTO HASHED (ID,HASH) VALUES (" + id +  ", '" + hashed_content + "')";
+                        num_of_inserts++;
+                    }
+                    else {
+                        if (num_of_inserts < 50) {
+                            string add = ", (" + id +  ", '" + hashed_content + "')";
+                            s = s + add;
+                            num_of_inserts++;
+                        }
+                        else {
+                            string add = ", (" + id +  ", '" + hashed_content + "'); ";
+                            string to_ins = s + add;
+                            sql = &to_ins[0];
+                            rc = sqlite3_exec(sql_database, sql, callback, 0, &zErrMsg);
+                            num_of_inserts = 0;
+                        }
+                    }
                     length_of_db++;
                 }
                 name.clear();
@@ -103,6 +121,15 @@ int make_db(string path_db, string path_names, sqlite3 *sql_database) {
             }
         }
     }
+
+    if (num_of_inserts > 0) {
+        string add = "; ";
+        string to_ins = s + add;
+        sql = &to_ins[0];
+        cout << to_ins << endl;
+        rc = sqlite3_exec(sql_database, sql, callback, 0, &zErrMsg);
+    }
+
     if (!name.empty()) { // Print out what we read from the last entry
         size_t dot_pos = name.find(".");
         string cut_name = name.substr(0, dot_pos);
@@ -117,8 +144,9 @@ int make_db(string path_db, string path_names, sqlite3 *sql_database) {
         }
 
         if (id != "NOT FOUND") {
-            string s = "INSERT INTO HASHED (ID,HASH) VALUES (" + id +  ", " + hashed_content + "); ";
+            s = "INSERT INTO HASHED (ID,HASH) VALUES (" + id +  ", '" + hashed_content + "'); ";
             sql = &s[0];
+            cout << s << endl;
             rc = sqlite3_exec(sql_database, sql, callback, 0, &zErrMsg);
             length_of_db++;
         }
@@ -127,11 +155,11 @@ int make_db(string path_db, string path_names, sqlite3 *sql_database) {
     cout << length_of_db << " proteins are successfully added to sql db\n";
 
     // Adding indexes for the second column
-    string s = "CREATE INDEX `HASH` ON `HASHED` (`HASH`);";
+    s = "CREATE INDEX `HASH` ON `HASHED` (`HASH`);";
     sql = &s[0];
     rc = sqlite3_exec(sql_database, sql, callback, 0, &zErrMsg);
 
-    // Now we have an sql db
+    // Now we have a sql db
     db.close();
     return 1;
 }
@@ -148,6 +176,18 @@ int make_search(string path, sqlite3 *sql_database) {
     // Open the query file, preparing a set for the query
     set <string> st;
     string name, content;
+
+    //  Print the database
+//    const char* data = "Callback function called";
+//    sql = "SELECT * from HASHED";
+//    rc = sqlite3_exec(sql_database, sql, callback, (void*)data, &zErrMsg);
+//
+//    if( rc != SQLITE_OK ) {
+//        fprintf(stderr, "SQL error: %s\n", zErrMsg);
+//        sqlite3_free(zErrMsg);
+//    } else {
+//        fprintf(stdout, "Operation done successfully\n");
+//    }
 
     while (getline(q, line).good()) {
         if (line.empty() || line[0] == '>') { // Identifier marker
