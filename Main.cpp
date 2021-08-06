@@ -15,7 +15,7 @@
 using namespace std;
 
 // Sql callback
-static int callback(void *data, int argc, char **argv, char **azColName){
+static int callback(void *data, int argc, char **argv, char **azColName) {
 
     fprintf(stderr, "%s: ", (const char*)data);
 
@@ -126,7 +126,6 @@ int make_db(string path_db, string path_names, sqlite3 *sql_database) {
         string add = "; ";
         string to_ins = s + add;
         sql = &to_ins[0];
-        cout << to_ins << endl;
         rc = sqlite3_exec(sql_database, sql, callback, 0, &zErrMsg);
     }
 
@@ -146,7 +145,6 @@ int make_db(string path_db, string path_names, sqlite3 *sql_database) {
         if (id != "NOT FOUND") {
             s = "INSERT INTO HASHED (ID,HASH) VALUES (" + id +  ", '" + hashed_content + "'); ";
             sql = &s[0];
-            cout << s << endl;
             rc = sqlite3_exec(sql_database, sql, callback, 0, &zErrMsg);
             length_of_db++;
         }
@@ -263,41 +261,50 @@ int make_search(string path, sqlite3 *sql_database) {
 int main(int argc, char *argv[]) {
 
     bool to_make_db = false, to_make_a_search = false;
-    string path_to_names = argv[1], path_to_db, path_to_query;
+    string path_to_names, path_to_db, path_to_query;
     fstream check_file;
 
-    check_file.open(path_to_names);
-    if (check_file.fail()) {
-        cout << "Invalid path to names file!" << endl;
-        return 0;
-    }
-    check_file.close();
-
     // Attributes parsing
-    for (int i = 2; i < argc; i++) {
+    for (int i = 1; i < argc; i++) {
         char a[] = "-d", *attribute = a;
         int co = strcmp(argv[i], attribute);
         if (co == 0) {
             to_make_db = true;
             path_to_db = argv[i + 1];
-            check_file.open(path_to_db);
-            if (check_file.fail()) {
-                cout << "Invalid path to database file!" << endl;
+            path_to_names = argv[i + 2];
+            try {
+                check_file.open(path_to_db);
+                if (check_file.fail()) {
+                    throw "Invalid path to database file!";
+                }
+                check_file.close();
+                check_file.open(path_to_names);
+                if (check_file.fail()) {
+                    throw "Invalid path to names file!";
+                }
+                check_file.close();
+            }
+            catch (const char* exception) {
+                cerr << "Error: " << exception << '\n';
                 return 0;
             }
-            check_file.close();
         }
         char a2[] = "-s", *attribute2 = a2;
         co = strcmp(argv[i], attribute2);
         if (co == 0) {
             to_make_a_search = true;
             path_to_query = argv[i + 1];
-            check_file.open(path_to_query);
-            if (check_file.fail()) {
-                cout << "Invalid path to query file!" << endl;
+            try {
+                check_file.open(path_to_query);
+                if (check_file.fail()) {
+                    throw "Invalid path to query file!";
+                }
+                check_file.close();
+            }
+            catch (const char* exception) {
+                cerr << "Error: " << exception << '\n';
                 return 0;
             }
-            check_file.close();
         }
     }
 
@@ -309,7 +316,7 @@ int main(int argc, char *argv[]) {
     // Open sql database
     rc = sqlite3_open("hash_database.db", &sql_db);
     if (rc) {
-        fprintf(stderr, "Can't open sql database: %s\n", sqlite3_errmsg(sql_db));
+        fprintf(stderr, "Error: Can't open sql database: %s\n", sqlite3_errmsg(sql_db));
         return 0;
     }
     else {
