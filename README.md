@@ -5,11 +5,11 @@ Given a full list of Identical Protein Group entries (IPGs) for a selected taxon
 ## Use
 1. Download *Main.cpp*, *md5.cpp*, and *md5.h* scripts. (The other scripts in the current repository attest to IPG content assessment and do not affect the tool's performance)
 2. Compile *Main.cpp* as following: `g++ Main.cpp -lsqlite3`;
-4. Launch the compiled script as following: 
+3. Launch the compiled script as following: 
 
-`./<scriptname> <names> -d <database> -s <query>` - if script is run for the first time and no database is available 
+`./<scriptname> -d <database> <names> -s <query>` - if script is run for the first time and no database is available 
 
-`./<scriptname> <names> -s <query>` - if the database is already built 
+`./<scriptname> -s <query>` - if the database is already built 
 
 Here, `<database>` refers to the FASTA reference file for selected taxon(-a), `<query>` refers to protein content of genome assembly in question, and `<names>` is a file containing protein ID to IPG ID mapping for reference file. For sequential launches of IPGQC with the same database, only the first use needs *-d* parameter specified.
 **NOTE**: The current version does not support differential database use. If you switch to another database, the previous one will be overriden. This is to be fixed soon.
