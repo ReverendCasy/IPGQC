@@ -1,17 +1,21 @@
 package main
 
 import (
+	"bufio"
 	"database/sql"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/shenwei356/bio/seqio/fastx"
 )
 
 func main()  {
-	file := "c:\\temp\\PAO1.fasta"
+	stats_file := "test_stats.tsv"
+	stats_data := parseTSV(stats_file)
+	file := "test_seqs.fasta"
 	//outfh, err := xopen.Wopen(file)
 	//checkError(err)
 	//defer outfh.Close()
@@ -28,9 +32,14 @@ func main()  {
 			checkError(err)
 			break
 		}
-		record.Format(0)
+		//record.Format(0)
 		// fmt is slow for output, because it's not buffered
 		//fmt.Printf("%s", record.Format(0))
+		id := string(record.ID)
+		id = id[:len(id)-2]
+		ipgId := stats_data[id]
+		fmt.Printf("%s", ipgId[1])
+		fmt.Printf("%s", record.Seq.Seq)
 		//record.FormatToWriter(outfh, 0)
 	}
 	createDB()
@@ -58,4 +67,36 @@ func createDB(){
 		checkError(err)
 	}
 	db.Close()
+}
+
+func parseTSV(fileName string) map[string][]string {
+	tsv, err := os.Open(fileName)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+
+	scn := bufio.NewScanner(tsv)
+
+	var lines []string
+
+	for scn.Scan() {
+		line := scn.Text()
+		lines = append(lines, line)
+	}
+
+	if err := scn.Err(); err != nil {
+		fmt.Println(err)
+		return nil
+	}
+
+	//lines = lines[1:] // First line is header
+	out := make(map[string][]string, len(lines))
+
+	for _, line := range lines {
+		record := strings.Split(line, "\t")
+		out[record[0]] = record
+	}
+
+	return out
 }
