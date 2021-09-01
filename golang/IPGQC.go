@@ -2,28 +2,44 @@ package main
 
 import (
 	"bufio"
+	"crypto/md5"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/shenwei356/bio/seqio/fastx"
 )
 
+type  Record struct {
+	id int
+	hash string
+}
+
+type Records []Record
+
 func main()  {
+	createDB()
 	stats_file := "test_stats.tsv"
 	stats_data := parseTSV(stats_file)
 	file := "test_seqs.fasta"
 	//outfh, err := xopen.Wopen(file)
 	//checkError(err)
 	//defer outfh.Close()
-
+	var r Records
 	reader, err := fastx.NewDefaultReader(file)
 	checkError(err)
+	//db, err := sql.Open("sqlite3", "data.db")
+	//checkError(err)
+	//sqlStatement := "insert into ProteinHashed (id, Hash) values ($1, $2)"
 	//var record *fastx.Record
+	counter := 0
 	for {
+		counter += 1
 		record, err := reader.Read()
 		if err != nil {
 			if err == io.EOF {
@@ -38,11 +54,19 @@ func main()  {
 		id := string(record.ID)
 		id = id[:len(id)-2]
 		ipgId := stats_data[id]
-		fmt.Printf("%s", ipgId[1])
-		fmt.Printf("%s", record.Seq.Seq)
+		hash := getMD5Hash(string(record.Seq.Seq))
+		s, err := strconv.Atoi(ipgId[1])
+		checkError(err)
+		rec := Record{s, hash}
+		r = append(r, rec)
+		//_, err = db.Exec(sqlStatement, s, hash)
+		//checkError(err)
+		//writeToDB(s, hash)
+		//fmt.Printf("%s", record.Seq.Seq)
 		//record.FormatToWriter(outfh, 0)
 	}
-	createDB()
+	//db.Close()
+	fmt.Println("Finish")
 }
 
 func checkError(err error) {
@@ -66,6 +90,15 @@ func createDB(){
 		_, err = db.Exec("CREATE TABLE 'ProteinHashed' ('id' INTEGER PRIMARY KEY, 'Hash' CHAR (100))")
 		checkError(err)
 	}
+	db.Close()
+}
+
+func writeToDB(id int, hash string)  {
+	db, err := sql.Open("sqlite3", "data.db")
+	checkError(err)
+	sqlStatement := "insert into ProteinHashed (id, Hash) values ($1, $2)"
+	_, err = db.Exec(sqlStatement, id, hash)
+	checkError(err)
 	db.Close()
 }
 
@@ -99,4 +132,9 @@ func parseTSV(fileName string) map[string][]string {
 	}
 
 	return out
+}
+
+func getMD5Hash(text string) string {
+	hash := md5.Sum([]byte(text))
+	return hex.EncodeToString(hash[:])
 }
