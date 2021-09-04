@@ -23,7 +23,10 @@ type  Record struct {
 type Records []Record
 
 func main()  {
-	createDB()
+	dbName := "data.db"
+	db := InitDB(dbName)
+	defer db.Close()
+	createTable(db)
 	stats_file := "test_stats.tsv"
 	stats_data := parseTSV(stats_file)
 	file := "test_seqs.fasta"
@@ -33,9 +36,6 @@ func main()  {
 	var r Records
 	reader, err := fastx.NewDefaultReader(file)
 	checkError(err)
-	//db, err := sql.Open("sqlite3", "data.db")
-	//checkError(err)
-	//sqlStatement := "insert into ProteinHashed (id, Hash) values ($1, $2)"
 	//var record *fastx.Record
 	counter := 0
 	for {
@@ -48,7 +48,6 @@ func main()  {
 			checkError(err)
 			break
 		}
-		//record.Format(0)
 		// fmt is slow for output, because it's not buffered
 		//fmt.Printf("%s", record.Format(0))
 		id := string(record.ID)
@@ -59,13 +58,10 @@ func main()  {
 		checkError(err)
 		rec := Record{s, hash}
 		r = append(r, rec)
-		//_, err = db.Exec(sqlStatement, s, hash)
-		//checkError(err)
-		//writeToDB(s, hash)
 		//fmt.Printf("%s", record.Seq.Seq)
 		//record.FormatToWriter(outfh, 0)
 	}
-	//db.Close()
+	writeToDB(db, r)
 	fmt.Println("Finish")
 }
 
@@ -76,30 +72,37 @@ func checkError(err error) {
 	}
 }
 
-func createDB(){
-	if _, err := os.Stat("data.db"); os.IsNotExist(err){
-		os.Create("data.db")
+func  InitDB(dbName string) *sql.DB {
+	if _, err := os.Stat(dbName); os.IsNotExist(err){
+		os.Create(dbName)
 	}
-
-	db, err := sql.Open("sqlite3", "data.db")
+	db, err := sql.Open("sqlite3", dbName)
 	checkError(err)
+	return db
+}
+
+func createTable(db *sql.DB){
 	var tableExists int
 	row := db.QueryRow("select count(*) as tableExists from sqlite_master where type='table' AND name='ProteinHashed'")
 	row.Scan(&tableExists)
 	if tableExists == 0 {
-		_, err = db.Exec("CREATE TABLE 'ProteinHashed' ('id' INTEGER PRIMARY KEY, 'Hash' CHAR (100))")
+		_, err := db.Exec("CREATE TABLE 'ProteinHashed' ('id' INTEGER PRIMARY KEY, 'Hash' CHAR (100))")
 		checkError(err)
 	}
-	db.Close()
 }
 
-func writeToDB(id int, hash string)  {
-	db, err := sql.Open("sqlite3", "data.db")
-	checkError(err)
+func writeToDB(db *sql.DB, items []Record)  {
 	sqlStatement := "insert into ProteinHashed (id, Hash) values ($1, $2)"
-	_, err = db.Exec(sqlStatement, id, hash)
+	stmt, err := db.Prepare(sqlStatement)
 	checkError(err)
-	db.Close()
+	defer stmt.Close()
+	tx, err := db.Begin()
+	checkError(err)
+	for _, item := range items{
+		_, err := tx.Stmt(stmt).Exec(item.id, item.hash)
+		checkError(err)
+	}
+	tx.Commit()
 }
 
 func parseTSV(fileName string) map[string][]string {
