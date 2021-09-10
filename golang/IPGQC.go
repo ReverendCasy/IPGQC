@@ -5,8 +5,10 @@ import (
 	"crypto/md5"
 	"database/sql"
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -15,15 +17,24 @@ import (
 	"github.com/shenwei356/bio/seqio/fastx"
 )
 
-type  Record struct {
-	id int
+type Record struct {
+	id   int
+	hash string
+}
+
+type SeqHash struct {
+	id   string
 	hash string
 }
 
 type Records []Record
 
-func main()  {
-	dbName := "data.db"
+//TODO: add cmd parameters
+var db = flag.String("dbfile", "", "path to database file")
+
+func main() {
+	flag.Parse()
+	dbName := *db
 	db := InitDB(dbName)
 	defer db.Close()
 	createTable(db)
@@ -33,36 +44,60 @@ func main()  {
 	//outfh, err := xopen.Wopen(file)
 	//checkError(err)
 	//defer outfh.Close()
-	var r Records
-	reader, err := fastx.NewDefaultReader(file)
-	checkError(err)
-	//var record *fastx.Record
-	counter := 0
-	for {
-		counter += 1
-		record, err := reader.Read()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			checkError(err)
-			break
-		}
-		// fmt is slow for output, because it's not buffered
-		//fmt.Printf("%s", record.Format(0))
-		id := string(record.ID)
-		id = id[:len(id)-2]
-		ipgId := stats_data[id]
-		hash := getMD5Hash(string(record.Seq.Seq))
-		s, err := strconv.Atoi(ipgId[1])
-		checkError(err)
-		rec := Record{s, hash}
-		r = append(r, rec)
-		//fmt.Printf("%s", record.Seq.Seq)
-		//record.FormatToWriter(outfh, 0)
+	hashes, err := readFastaFile(file)
+	if err != nil {
+		log.Println(err)
 	}
-	writeToDB(db, r)
+	records := prepareRecords(stats_data, hashes)
+	writeToDB(db, records)
 	fmt.Println("Finish")
+}
+
+func readFastaFile(filename string) (<-chan *SeqHash, error) {
+	res := make(chan *SeqHash, 10)
+	reader, err := fastx.NewDefaultReader(filename)
+	if err != nil {
+		return res, err
+	}
+	go func() {
+		defer reader.Close()
+		for {
+			record, err := reader.Read()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				log.Fatalln(err)
+			}
+
+			id := string(record.ID)
+			id = id[:len(id)-2]
+			hash := getMD5Hash(string(record.Seq.Seq))
+			checkError(err)
+			res <- &SeqHash{id, hash}
+		}
+		close(res)
+	}()
+	return res, err
+}
+
+func prepareRecords(stats_data map[string][]string, hashes <-chan *SeqHash) <-chan *Record {
+	res := make(chan *Record, 10)
+	go func() {
+		for hash := range hashes {
+			ipgId := stats_data[hash.id]
+			s, err := strconv.Atoi(ipgId[1])
+			if err != nil {
+				log.Fatalln(err)
+			}
+			res <- &Record{
+				id:   s,
+				hash: hash.hash,
+			}
+		}
+		close(res)
+	}()
+	return res
 }
 
 func checkError(err error) {
@@ -72,8 +107,8 @@ func checkError(err error) {
 	}
 }
 
-func  InitDB(dbName string) *sql.DB {
-	if _, err := os.Stat(dbName); os.IsNotExist(err){
+func InitDB(dbName string) *sql.DB {
+	if _, err := os.Stat(dbName); os.IsNotExist(err) {
 		os.Create(dbName)
 	}
 	db, err := sql.Open("sqlite3", dbName)
@@ -81,7 +116,7 @@ func  InitDB(dbName string) *sql.DB {
 	return db
 }
 
-func createTable(db *sql.DB){
+func createTable(db *sql.DB) {
 	var tableExists int
 	row := db.QueryRow("select count(*) as tableExists from sqlite_master where type='table' AND name='ProteinHashed'")
 	row.Scan(&tableExists)
@@ -91,14 +126,14 @@ func createTable(db *sql.DB){
 	}
 }
 
-func writeToDB(db *sql.DB, items []Record)  {
+func writeToDB(db *sql.DB, items <-chan *Record) {
 	sqlStatement := "insert into ProteinHashed (id, Hash) values ($1, $2)"
 	stmt, err := db.Prepare(sqlStatement)
 	checkError(err)
 	defer stmt.Close()
 	tx, err := db.Begin()
 	checkError(err)
-	for _, item := range items{
+	for item := range items {
 		_, err := tx.Stmt(stmt).Exec(item.id, item.hash)
 		checkError(err)
 	}
