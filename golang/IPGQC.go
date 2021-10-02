@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/shenwei356/bio/seqio/fastx"
@@ -30,27 +31,102 @@ type SeqHash struct {
 type Records []Record
 
 //TODO: add cmd parameters
-var db = flag.String("dbfile", "", "path to database file")
+var db = flag.String("dbfile", "data.db", "path to database file")
 
 func main() {
+	fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
+	protein := "MNLYELFLNQKLLYGTDPHFNGVFLTLLEKFGLHFKDLTALWKHAKTITDFDEQGIVNALKAYFVDQLPLPYITGSVKLGSLTFKTQPGVFIPRADSLALLKVVKAQNLKTAVDLCCGSGTLAIALKKRFPHLNVYGSDLNPQALQLAAQNARLNMVEVQWIEADFLAALAQVNTPIDLIITNPPYLNESQLDQTLNHEPRNSLVADGNGILFYQKLYNFLLGNRQVKQVILECSPTQKKEFLALFSIFKTSEIYTSHKQFIGLSIDNTKLPVLKIAQTKQIKALLDKGMTAIIPTDTQIGLMSYCQQDLDHIKQRDPNKHYVQFLAPSQINQLPKQLQKLAKLFWPGAYTFIVDGQSYRLPNSPQLLKLLKTVGLIYCTSANQAKQKPFGKLSAYQNDPYWVQQNCFIVQNSFKSNNEPSLIYNLDTKQIVRGSSTQLQRFQALLAKHKLRH"
+	protein = getMD5Hash(protein)
+	//_ = protein
+	//protein := "fb41fec9f6e80c29ab4ca7a4de07b0fd"
 	flag.Parse()
 	dbName := *db
 	db := InitDB(dbName)
 	defer db.Close()
-	createTable(db)
-	stats_file := "test_stats.tsv"
-	stats_data := parseTSV(stats_file)
-	file := "test_seqs.fasta"
-	//outfh, err := xopen.Wopen(file)
-	//checkError(err)
-	//defer outfh.Close()
-	hashes, err := readFastaFile(file)
-	if err != nil {
-		log.Println(err)
+	createTables(db)
+	if checkProteinNotExists(db) {
+		stats_file := "test_stats.tsv"
+		stats_data := parseTSV(stats_file)
+		file := "test_seqs.fasta"
+		//outfh, err := xopen.Wopen(file)
+		//checkError(err)
+		//defer outfh.Close()
+		hashes, err := readFastaFile(file)
+		checkError(err)
+		records := prepareRecords(stats_data, hashes)
+		writeToDB(db, records)
 	}
-	records := prepareRecords(stats_data, hashes)
-	writeToDB(db, records)
+	if checkSpeciesNotExists(db) {
+		species := "patable.tsv"
+		species_data := parseTSV(species)
+		writeSpecies(db, species_data)
+	}
+	species := searchSpeciesWithProtein(db, protein)
+	fmt.Println(species)
+	fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Println("Finish")
+}
+
+func searchSpeciesWithProtein(db *sql.DB, protein string) []string{
+	sqlStatement := "select ss.name from ProteinHashed as phd inner join ProteinHashedSpecies as phs on phd.id = phs.ProteinHashed inner join Species as ss on phs.Species = ss.id where phd.Hash = $1"
+	rows, err := db.Query(sqlStatement, protein)
+
+	//stmt, err := db.Prepare(sqlStatement)
+	checkError(err)
+	defer rows.Close()
+	//tx, err := db.Begin()
+	var species []string
+	for rows.Next() {
+		var name string
+		err = rows.Scan(&name)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		species = append(species, name)
+	}
+	return species
+}
+
+func checkProteinNotExists(db *sql.DB) bool {
+	sqlStatement := "select count(id) as proteinsCount from ProteinHashed"
+	stmt, err := db.Prepare(sqlStatement)
+	checkError(err)
+	defer stmt.Close()
+	tx, err := db.Begin()
+	checkError(err)
+	var proteinsCount int
+	err = tx.Stmt(stmt).QueryRow().Scan(&proteinsCount)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		tx.Rollback()
+		os.Exit(1)
+	}
+	tx.Commit()
+	if proteinsCount == 0 {
+		return true
+	}
+	return false
+}
+
+func checkSpeciesNotExists(db *sql.DB) bool {
+	sqlStatement := "select count(id) as speciesCount from Species"
+	stmt, err := db.Prepare(sqlStatement)
+	checkError(err)
+	defer stmt.Close()
+	tx, err := db.Begin()
+	checkError(err)
+	var speciesCount int
+	err = tx.Stmt(stmt).QueryRow().Scan(&speciesCount)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		tx.Rollback()
+		os.Exit(1)
+	}
+	tx.Commit()
+	if speciesCount == 0 {
+		return true
+	}
+	return false
 }
 
 func readFastaFile(filename string) (<-chan *SeqHash, error) {
@@ -116,12 +192,24 @@ func InitDB(dbName string) *sql.DB {
 	return db
 }
 
-func createTable(db *sql.DB) {
+func createTables(db *sql.DB) {
 	var tableExists int
 	row := db.QueryRow("select count(*) as tableExists from sqlite_master where type='table' AND name='ProteinHashed'")
 	row.Scan(&tableExists)
 	if tableExists == 0 {
 		_, err := db.Exec("CREATE TABLE 'ProteinHashed' ('id' INTEGER PRIMARY KEY, 'Hash' CHAR (100))")
+		checkError(err)
+	}
+	row = db.QueryRow("select count(*) as tableExists from sqlite_master where type='table' and name='Species'")
+	row.Scan(&tableExists)
+	if tableExists == 0 {
+		_, err := db.Exec("create table 'Species' ('id' integer primary key, 'Name' char(200))")
+		checkError(err)
+	}
+	row = db.QueryRow("select count(*) as tableExists from sqlite_master where type='table' and name='ProteinHashedSpecies'")
+	row.Scan(&tableExists)
+	if tableExists == 0 {
+		_, err := db.Exec("create table 'ProteinHashedSpecies' ('ProteinHashed' integer, 'Species' integer, foreign key(ProteinHashed) references ProteinHashed(id), foreign key(Species) references Species(id))")
 		checkError(err)
 	}
 }
@@ -135,19 +223,63 @@ func writeToDB(db *sql.DB, items <-chan *Record) {
 	checkError(err)
 	for item := range items {
 		_, err := tx.Stmt(stmt).Exec(item.id, item.hash)
-		checkError(err)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			tx.Rollback()
+			os.Exit(1)
+		}
+	}
+	tx.Commit()
+}
+
+func writeSpecies(db *sql.DB, species_records map[string][]string)  {
+	sqlStatement := "insert into Species (Name) values ($1)"
+	stmt, err := db.Prepare(sqlStatement)
+	checkError(err)
+	defer stmt.Close()
+	sqlStatementIpgSpecie := "insert into ProteinHashedSpecies (ProteinHashed, Species) values ($1, $2)"
+	stmtIpgS, err := db.Prepare(sqlStatementIpgSpecie)
+	checkError(err)
+	defer stmtIpgS.Close()
+	tx, err := db.Begin()
+	checkError(err)
+	for item, specieIpgsids := range species_records {
+		res, err := tx.Stmt(stmt).Exec(item)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			tx.Rollback()
+			os.Exit(1)
+		}
+		specieId, err := res.LastInsertId()
+		ipgids := strings.Split(specieIpgsids[1], ",")
+		for _, ipgid := range ipgids {
+			if ipgid != "" {
+				id, err := strconv.Atoi(ipgid)
+				if err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					tx.Rollback()
+					os.Exit(1)
+				}
+				_, err = tx.Stmt(stmtIpgS).Exec(id, specieId)
+				if err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					tx.Rollback()
+					os.Exit(1)
+				}
+			}
+		}
 	}
 	tx.Commit()
 }
 
 func parseTSV(fileName string) map[string][]string {
 	tsv, err := os.Open(fileName)
-	if err != nil {
-		fmt.Println(err)
-		return nil
-	}
+	checkError(err)
 
 	scn := bufio.NewScanner(tsv)
+	const maxCapacity = 20000000
+	buf := make([]byte, maxCapacity)
+	scn.Buffer(buf, maxCapacity)
 
 	var lines []string
 
@@ -156,10 +288,8 @@ func parseTSV(fileName string) map[string][]string {
 		lines = append(lines, line)
 	}
 
-	if err := scn.Err(); err != nil {
-		fmt.Println(err)
-		return nil
-	}
+	err = scn.Err()
+	checkError(err)
 
 	//lines = lines[1:] // First line is header
 	out := make(map[string][]string, len(lines))
