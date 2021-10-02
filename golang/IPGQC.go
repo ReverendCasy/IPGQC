@@ -32,6 +32,10 @@ type Records []Record
 
 //TODO: add cmd parameters
 var db = flag.String("dbfile", "data.db", "path to database file")
+var proteins = flag.String("proteins", "test_seqs.fasta", "path to file with proteins")
+var ipgidsProtein = flag.String("ipgid", "test_stats.tsv", "path to file with matching ipgid and sequence name in fasta")
+var speciesIpgid = flag.String("species", "patable.tsv", "path to file with species and information about proteins they contain")
+var proteinsCheck = flag.String("search", "check_seqs.fasta", "path to file with searching sequences")
 
 func main() {
 	fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
@@ -41,30 +45,47 @@ func main() {
 	//protein := "fb41fec9f6e80c29ab4ca7a4de07b0fd"
 	flag.Parse()
 	dbName := *db
+	proteinsFile := *proteins
+	ipgidstatsFile := *ipgidsProtein
+	speciesIpgidFile := *speciesIpgid
+	proteinsCheckFile := *proteinsCheck
 	db := InitDB(dbName)
 	defer db.Close()
 	createTables(db)
 	if checkProteinNotExists(db) {
-		stats_file := "test_stats.tsv"
-		stats_data := parseTSV(stats_file)
-		file := "test_seqs.fasta"
+		//stats_file := "test_stats.tsv"
+		stats_data := parseTSV(ipgidstatsFile)
+		//file := "test_seqs.fasta"
 		//outfh, err := xopen.Wopen(file)
 		//checkError(err)
 		//defer outfh.Close()
-		hashes, err := readFastaFile(file)
+		hashes, err := readFastaFile(proteinsFile)
 		checkError(err)
 		records := prepareRecords(stats_data, hashes)
 		writeToDB(db, records)
 	}
 	if checkSpeciesNotExists(db) {
-		species := "patable.tsv"
-		species_data := parseTSV(species)
+		//species := "patable.tsv"
+		species_data := parseTSV(speciesIpgidFile)
 		writeSpecies(db, species_data)
 	}
-	species := searchSpeciesWithProtein(db, protein)
+	searchingProteinsHashes, err := readFastaFile(proteinsCheckFile)
+	checkError(err)
+	species := searchProtein(db, searchingProteinsHashes)
+	//species := searchSpeciesWithProtein(db, protein)
 	fmt.Println(species)
 	fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Println("Finish")
+}
+
+func searchProtein(db *sql.DB, hashes <-chan *SeqHash) []string{
+	var res []string
+	go func() {
+		for hash := range hashes {
+			res = append(res, searchSpeciesWithProtein(db, hash.hash) ...)
+		}
+	}()
+	return res
 }
 
 func searchSpeciesWithProtein(db *sql.DB, protein string) []string{
