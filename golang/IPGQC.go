@@ -7,16 +7,14 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/shenwei356/bio/seqio/fastx"
 	"io"
 	"log"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
-
-	_ "github.com/mattn/go-sqlite3"
-	"github.com/shenwei356/bio/seqio/fastx"
 )
 
 type Record struct {
@@ -55,11 +53,7 @@ var speciesIpgid = flag.String("species", "patable.tsv", "path to file with spec
 var proteinsCheck = flag.String("search", "check_seqs.fasta", "path to file with searching sequences")
 
 func main() {
-	fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
-	protein := "MNLYELFLNQKLLYGTDPHFNGVFLTLLEKFGLHFKDLTALWKHAKTITDFDEQGIVNALKAYFVDQLPLPYITGSVKLGSLTFKTQPGVFIPRADSLALLKVVKAQNLKTAVDLCCGSGTLAIALKKRFPHLNVYGSDLNPQALQLAAQNARLNMVEVQWIEADFLAALAQVNTPIDLIITNPPYLNESQLDQTLNHEPRNSLVADGNGILFYQKLYNFLLGNRQVKQVILECSPTQKKEFLALFSIFKTSEIYTSHKQFIGLSIDNTKLPVLKIAQTKQIKALLDKGMTAIIPTDTQIGLMSYCQQDLDHIKQRDPNKHYVQFLAPSQINQLPKQLQKLAKLFWPGAYTFIVDGQSYRLPNSPQLLKLLKTVGLIYCTSANQAKQKPFGKLSAYQNDPYWVQQNCFIVQNSFKSNNEPSLIYNLDTKQIVRGSSTQLQRFQALLAKHKLRH"
-	protein = getMD5Hash(protein)
-	//_ = protein
-	//protein := "fb41fec9f6e80c29ab4ca7a4de07b0fd"
+	//fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
 	flag.Parse()
 	dbName := *db
 	proteinsFile := *proteins
@@ -97,7 +91,6 @@ func main() {
 	var proteinsDB []int
 	var speciesCount []SpeciesCount
 	for _, specie := range species{
-		fmt.Println(specie)
 		if !containsInt(proteinsDB, specie.ipgid) {
 			proteinsDB = append(proteinsDB, specie.ipgid)
 		}
@@ -121,9 +114,9 @@ func main() {
 	for _, s := range speciesCount {
 		res.species = res.species + s.name + " "
 	}
-	fmt.Println(res)
-	fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
-	fmt.Println("Finish")
+	fmt.Println("Total proteins " + strconv.Itoa(res.proteinsPassed) + ". Proteins in db " + strconv.Itoa(res.proteinsDB) + ". Species: " + res.species)
+	//fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
+	//fmt.Println("Finish")
 }
 
 func containsString(s []string, searchterm string) bool {
@@ -151,12 +144,9 @@ func containsInt(s []int, e int) bool {
 
 func searchProtein(db *sql.DB, hashes <-chan *SeqHash) []SearchResult {
 	var res []SearchResult
-	//res := make(chan *string, 10)
-	//var hashProteins []string
 	var searchingProteinString string
 	for hash := range hashes {
 		searchingProteinString = searchingProteinString + "'" + hash.hash + "'" + ", "
-		//hashProteins = append(hashProteins, hash.hash)
 	}
 	searchingProteinString = strings.TrimSpace(searchingProteinString)
 	searchingProteinString = strings.TrimSuffix(searchingProteinString, ",")
@@ -190,11 +180,8 @@ func searchProtein(db *sql.DB, hashes <-chan *SeqHash) []SearchResult {
 func searchSpeciesWithProtein(db *sql.DB, protein string) []string{
 	sqlStatement := "select ss.name from ProteinHashed as phd inner join ProteinHashedSpecies as phs on phd.id = phs.ProteinHashed inner join Species as ss on phs.Species = ss.id where phd.Hash = $1"
 	rows, err := db.Query(sqlStatement, protein)
-
-	//stmt, err := db.Prepare(sqlStatement)
 	checkError(err)
 	defer rows.Close()
-	//tx, err := db.Begin()
 	var species []string
 	for rows.Next() {
 		var name string
