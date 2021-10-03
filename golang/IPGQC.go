@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,22 @@ type Record struct {
 type SeqHash struct {
 	id   string
 	hash string
+}
+
+type  SearchResult struct {
+	ipgid int
+	specie string
+}
+
+type ReturningResult struct {
+	proteinsPassed int
+	proteinsDB int
+	species string
+}
+
+type SpeciesCount struct {
+	name string
+	qty int
 }
 
 type Records []Record
@@ -75,16 +92,65 @@ func main() {
 	checkError(err)
 	species := searchProtein(db, searchingProteinsHashes)
 	//species := searchSpeciesWithProtein(db, protein)
-	for specie := range species{
+	var res ReturningResult
+	res.proteinsPassed = cap(searchingProteinsHashes) / 2
+	var proteinsDB []int
+	var speciesCount []SpeciesCount
+	for _, specie := range species{
 		fmt.Println(specie)
+		if !containsInt(proteinsDB, specie.ipgid) {
+			proteinsDB = append(proteinsDB, specie.ipgid)
+		}
+		if !containsSpecie(speciesCount, specie.specie) {
+			var specieNew SpeciesCount
+			specieNew.qty = 1
+			specieNew.name = specie.specie
+			speciesCount = append(speciesCount, specieNew)
+		} else {
+			for _, s := range speciesCount {
+				if s.name == specie.specie {
+					s.qty = s.qty + 1
+				}
+			}
+		}
 	}
-	fmt.Println(species)
+	sort.SliceStable(speciesCount, func(i, j int) bool {
+		return speciesCount[i].qty > speciesCount[j].qty
+	})
+	res.proteinsDB = len(proteinsDB)
+	for _, s := range speciesCount {
+		res.species = res.species + s.name + " "
+	}
+	fmt.Println(res)
 	fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Println("Finish")
 }
 
-func searchProtein(db *sql.DB, hashes <-chan *SeqHash) []string{
-	var res []string
+func containsString(s []string, searchterm string) bool {
+	i := sort.SearchStrings(s, searchterm)
+	return i < len(s) && s[i] == searchterm
+}
+
+func containsSpecie(species []SpeciesCount, specie string) bool {
+	for _, s := range species{
+		if s.name == specie {
+			return true
+		}
+	}
+	return false
+}
+
+func containsInt(s []int, e int) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
+}
+
+func searchProtein(db *sql.DB, hashes <-chan *SeqHash) []SearchResult {
+	var res []SearchResult
 	//res := make(chan *string, 10)
 	//var hashProteins []string
 	var searchingProteinString string
@@ -94,7 +160,7 @@ func searchProtein(db *sql.DB, hashes <-chan *SeqHash) []string{
 	}
 	searchingProteinString = strings.TrimSpace(searchingProteinString)
 	searchingProteinString = strings.TrimSuffix(searchingProteinString, ",")
-	sqlStatement := "select distinct ss.name " +
+	sqlStatement := "select phd.id, ss.name " +
 		"from ProteinHashed as phd " +
 		"inner join ProteinHashedSpecies as phs on phd.id = phs.ProteinHashed " +
 		"inner join Species as ss on phs.Species = ss.id " +
@@ -107,12 +173,16 @@ func searchProtein(db *sql.DB, hashes <-chan *SeqHash) []string{
 		log.Fatalln(err)
 	}
 	for rows.Next() {
+		var ipgid int
 		var name string
-		err = rows.Scan(&name)
+		err = rows.Scan(&ipgid, &name)
 		if err != nil {
 			log.Fatalln(err)
 		}
-		res = append(res, name)
+		var r SearchResult
+		r.ipgid = ipgid
+		r.specie = name
+		res = append(res, r)
 	}
 	return res
 }
