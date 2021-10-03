@@ -70,9 +70,14 @@ func main() {
 		writeSpecies(db, species_data)
 	}
 	searchingProteinsHashes, err := readFastaFile(proteinsCheckFile)
+	//_ = proteinsCheckFile
+	//searchingProteinsHashes, err := readFastaFile(proteinsFile)
 	checkError(err)
 	species := searchProtein(db, searchingProteinsHashes)
 	//species := searchSpeciesWithProtein(db, protein)
+	for specie := range species{
+		fmt.Println(specie)
+	}
 	fmt.Println(species)
 	fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Println("Finish")
@@ -80,11 +85,35 @@ func main() {
 
 func searchProtein(db *sql.DB, hashes <-chan *SeqHash) []string{
 	var res []string
-	go func() {
-		for hash := range hashes {
-			res = append(res, searchSpeciesWithProtein(db, hash.hash) ...)
+	//res := make(chan *string, 10)
+	//var hashProteins []string
+	var searchingProteinString string
+	for hash := range hashes {
+		searchingProteinString = searchingProteinString + "'" + hash.hash + "'" + ", "
+		//hashProteins = append(hashProteins, hash.hash)
+	}
+	searchingProteinString = strings.TrimSpace(searchingProteinString)
+	searchingProteinString = strings.TrimSuffix(searchingProteinString, ",")
+	sqlStatement := "select distinct ss.name " +
+		"from ProteinHashed as phd " +
+		"inner join ProteinHashedSpecies as phs on phd.id = phs.ProteinHashed " +
+		"inner join Species as ss on phs.Species = ss.id " +
+		"where phd.Hash in (" + searchingProteinString + ")"
+
+	stmt, err := db.Prepare(sqlStatement)
+	rows, err := stmt.Query()
+	defer rows.Close()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	for rows.Next() {
+		var name string
+		err = rows.Scan(&name)
+		if err != nil {
+			log.Fatalln(err)
 		}
-	}()
+		res = append(res, name)
+	}
 	return res
 }
 
