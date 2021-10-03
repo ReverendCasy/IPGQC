@@ -50,7 +50,8 @@ var db = flag.String("dbfile", "data.db", "path to database file")
 var proteins = flag.String("proteins", "test_seqs.fasta", "path to file with proteins")
 var ipgidsProtein = flag.String("ipgid", "test_stats.tsv", "path to file with matching ipgid and sequence name in fasta")
 var speciesIpgid = flag.String("species", "patable.tsv", "path to file with species and information about proteins they contain")
-var proteinsCheck = flag.String("search", "check_seqs.fasta", "path to file with searching sequences")
+//var proteinsCheck = flag.String("search", "check_seqs.fasta", "path to file with searching sequences")
+var proteinsCheck = flag.String("search", "sen_flye_SRP250949_pilon.faa", "path to file with searching sequences")
 
 func main() {
 	//fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
@@ -84,10 +85,11 @@ func main() {
 	//_ = proteinsCheckFile
 	//searchingProteinsHashes, err := readFastaFile(proteinsFile)
 	checkError(err)
-	species := searchProtein(db, searchingProteinsHashes)
-	//species := searchSpeciesWithProtein(db, protein)
 	var res ReturningResult
-	res.proteinsPassed = cap(searchingProteinsHashes) / 2
+	species, proteinsPassed := searchProtein(db, searchingProteinsHashes)
+	res.proteinsPassed = proteinsPassed
+	//species := searchSpeciesWithProtein(db, protein)
+	//res.proteinsPassed = cap(searchingProteinsHashes) / 2
 	var proteinsDB []int
 	var speciesCount []SpeciesCount
 	for _, specie := range species{
@@ -142,11 +144,13 @@ func containsInt(s []int, e int) bool {
 	return false
 }
 
-func searchProtein(db *sql.DB, hashes <-chan *SeqHash) []SearchResult {
+func searchProtein(db *sql.DB, hashes <-chan *SeqHash) ([]SearchResult, int) {
 	var res []SearchResult
 	var searchingProteinString string
+	var seqHashCount int = 0
 	for hash := range hashes {
 		searchingProteinString = searchingProteinString + "'" + hash.hash + "'" + ", "
+		seqHashCount = seqHashCount + 1
 	}
 	searchingProteinString = strings.TrimSpace(searchingProteinString)
 	searchingProteinString = strings.TrimSuffix(searchingProteinString, ",")
@@ -174,7 +178,7 @@ func searchProtein(db *sql.DB, hashes <-chan *SeqHash) []SearchResult {
 		r.specie = name
 		res = append(res, r)
 	}
-	return res
+	return res, seqHashCount
 }
 
 func searchSpeciesWithProtein(db *sql.DB, protein string) []string{
