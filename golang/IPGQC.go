@@ -113,10 +113,20 @@ func main() {
 		return speciesCount[i].qty > speciesCount[j].qty
 	})
 	res.proteinsDB = len(proteinsDB)
-	fmt.Println("Total proteins " + strconv.Itoa(res.proteinsPassed) + ". Proteins in db " + strconv.Itoa(res.proteinsDB) + ".")
+	fmt.Println("Total proteins " + strconv.Itoa(res.proteinsPassed) + ".")
+	fmt.Println("Proteins in db " + strconv.Itoa(res.proteinsDB) + ":")
+	proteinsStr := ""
+	for _, s := range proteinsDB {
+		proteinsStr = proteinsStr + strconv.Itoa(s) + ", "
+	}
+
+	proteinsStr = strings.TrimSpace(proteinsStr)
+	proteinsStr = strings.TrimSuffix(proteinsStr, ",")
+	fmt.Println(proteinsStr)
+
 	fmt.Println("Species:")
 	for _, s := range speciesCount {
-		fmt.Println(s.name)
+		fmt.Println(s.name + "	(" + strconv.Itoa(s.qty) + ")")
 	}
 	//fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
 	//fmt.Println("Finish")
