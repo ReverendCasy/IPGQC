@@ -269,7 +269,11 @@ func readFastaFile(filename string) (<-chan *SeqHash, error) {
 			}
 
 			id := string(record.ID)
-			id = id[:len(id)-2]
+			isDot := id[len(id)-2:len(id)-1]
+			if isDot == "." {
+				id = id[:len(id)-2]
+			}
+
 			hash := getMD5Hash(string(record.Seq.Seq))
 			checkError(err)
 			res <- &SeqHash{id, hash}
