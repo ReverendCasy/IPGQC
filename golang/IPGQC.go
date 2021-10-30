@@ -102,9 +102,9 @@ func main() {
 			specieNew.name = specie.specie
 			speciesCount = append(speciesCount, specieNew)
 		} else {
-			for _, s := range speciesCount {
-				if s.name == specie.specie {
-					s.qty = s.qty + 1
+			for i := 0; i < len(speciesCount); i++{
+				if speciesCount[i].name == specie.specie {
+					speciesCount[i].qty = speciesCount[i].qty + 1
 				}
 			}
 		}
