@@ -7,14 +7,15 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3"
-	"github.com/shenwei356/bio/seqio/fastx"
 	"io"
 	"log"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
+
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/shenwei356/bio/seqio/fastx"
 )
 
 type Record struct {
@@ -27,20 +28,20 @@ type SeqHash struct {
 	hash string
 }
 
-type  SearchResult struct {
-	ipgid int
+type SearchResult struct {
+	ipgid  int
 	specie string
 }
 
 type ReturningResult struct {
 	proteinsPassed int
-	proteinsDB int
-	species string
+	proteinsDB     int
+	species        string
 }
 
 type SpeciesCount struct {
 	name string
-	qty int
+	qty  int
 }
 
 type Records []Record
@@ -50,8 +51,10 @@ var db = flag.String("dbfile", "data.db", "path to database file")
 var proteins = flag.String("proteins", "test_seqs.fasta", "path to file with proteins")
 var ipgidsProtein = flag.String("ipgid", "test_stats.tsv", "path to file with matching ipgid and sequence name in fasta")
 var speciesIpgid = flag.String("species", "patable.tsv", "path to file with species and information about proteins they contain")
+
 //var proteinsCheck = flag.String("search", "check_seqs.fasta", "path to file with searching sequences")
 var proteinsCheck = flag.String("search", "sen_flye_SRP250949_pilon.faa", "path to file with searching sequences")
+var onlyDB = flag.Bool("onlyDB", true, "create only database without search")
 
 func main() {
 	//fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
@@ -61,6 +64,7 @@ func main() {
 	ipgidstatsFile := *ipgidsProtein
 	speciesIpgidFile := *speciesIpgid
 	proteinsCheckFile := *proteinsCheck
+	createOnlyDB := *onlyDB
 	db := InitDB(dbName)
 	defer db.Close()
 	createTables(db)
@@ -81,6 +85,9 @@ func main() {
 		species_data := parseTSV(speciesIpgidFile)
 		writeSpecies(db, species_data)
 	}
+	if createOnlyDB {
+		return
+	}
 	searchingProteinsHashes, err := readFastaFile(proteinsCheckFile)
 	//_ = proteinsCheckFile
 	//searchingProteinsHashes, err := readFastaFile(proteinsFile)
@@ -92,7 +99,7 @@ func main() {
 	//res.proteinsPassed = cap(searchingProteinsHashes) / 2
 	var proteinsDB []int
 	var speciesCount []SpeciesCount
-	for _, specie := range species{
+	for _, specie := range species {
 		if !containsInt(proteinsDB, specie.ipgid) {
 			proteinsDB = append(proteinsDB, specie.ipgid)
 		}
@@ -102,7 +109,7 @@ func main() {
 			specieNew.name = specie.specie
 			speciesCount = append(speciesCount, specieNew)
 		} else {
-			for i := 0; i < len(speciesCount); i++{
+			for i := 0; i < len(speciesCount); i++ {
 				if speciesCount[i].name == specie.specie {
 					speciesCount[i].qty = speciesCount[i].qty + 1
 				}
@@ -138,7 +145,7 @@ func containsString(s []string, searchterm string) bool {
 }
 
 func containsSpecie(species []SpeciesCount, specie string) bool {
-	for _, s := range species{
+	for _, s := range species {
 		if s.name == specie {
 			return true
 		}
@@ -192,7 +199,7 @@ func searchProtein(db *sql.DB, hashes <-chan *SeqHash) ([]SearchResult, int) {
 	return res, seqHashCount
 }
 
-func searchSpeciesWithProtein(db *sql.DB, protein string) []string{
+func searchSpeciesWithProtein(db *sql.DB, protein string) []string {
 	sqlStatement := "select ss.name from ProteinHashed as phd inner join ProteinHashedSpecies as phs on phd.id = phs.ProteinHashed inner join Species as ss on phs.Species = ss.id where phd.Hash = $1"
 	rows, err := db.Query(sqlStatement, protein)
 	checkError(err)
@@ -269,7 +276,7 @@ func readFastaFile(filename string) (<-chan *SeqHash, error) {
 			}
 
 			id := string(record.ID)
-			isDot := id[len(id)-2:len(id)-1]
+			isDot := id[len(id)-2 : len(id)-1]
 			if isDot == "." {
 				id = id[:len(id)-2]
 			}
@@ -358,7 +365,7 @@ func writeToDB(db *sql.DB, items <-chan *Record) {
 	tx.Commit()
 }
 
-func writeSpecies(db *sql.DB, species_records map[string][]string)  {
+func writeSpecies(db *sql.DB, species_records map[string][]string) {
 	sqlStatement := "insert into Species (Name) values ($1)"
 	stmt, err := db.Prepare(sqlStatement)
 	checkError(err)
