@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	fisher "github.com/glycerine/golang-fisher-exact"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/shenwei356/bio/seqio/fastx"
 )
@@ -46,13 +47,12 @@ type SpeciesCount struct {
 
 type Records []Record
 
-//TODO: add cmd parameters
 var db = flag.String("dbfile", "data.db", "path to database file")
-var proteins = flag.String("proteins", "test_seqs.fasta", "path to file with proteins")
+var proteinsFilePath = flag.String("proteinsFilePath", "test_seqs.fasta", "path to file with proteinsFilePath")
 var ipgidsProtein = flag.String("ipgid", "test_stats.tsv", "path to file with matching ipgid and sequence name in fasta")
-var speciesIpgid = flag.String("species", "patable.tsv", "path to file with species and information about proteins they contain")
+var speciesIpgid = flag.String("species", "patable.tsv", "path to file with species and information about proteinsFilePath they contain")
 
-//var proteinsCheck = flag.String("search", "check_seqs.fasta", "path to file with searching sequences")
+// var proteinsCheck = flag.String("search", "check_seqs.fasta", "path to file with searching sequences")
 var proteinsCheck = flag.String("search", "sen_flye_SRP250949_pilon.faa", "path to file with searching sequences")
 var onlyDB = flag.Bool("onlyDB", true, "create only database without search")
 
@@ -60,7 +60,7 @@ func main() {
 	//fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
 	flag.Parse()
 	dbName := *db
-	proteinsFile := *proteins
+	proteinsFile := *proteinsFilePath
 	ipgidstatsFile := *ipgidsProtein
 	speciesIpgidFile := *speciesIpgid
 	proteinsCheckFile := *proteinsCheck
@@ -92,6 +92,8 @@ func main() {
 	//_ = proteinsCheckFile
 	//searchingProteinsHashes, err := readFastaFile(proteinsFile)
 	checkError(err)
+	var totalProteins = len(searchingProteinsHashes)
+
 	var res ReturningResult
 	species, proteinsPassed := searchProtein(db, searchingProteinsHashes)
 	res.proteinsPassed = proteinsPassed
@@ -135,8 +137,19 @@ func main() {
 	for _, s := range speciesCount {
 		fmt.Println(s.name + "	(" + strconv.Itoa(s.qty) + ")")
 	}
+	var totalDBProteins = countDBProteins(db)
+	m := totalProteins - res.proteinsPassed
+	var expSpec = (totalProteins * res.proteinsPassed) / totalDBProteins
+	var expNon = (totalProteins * (totalProteins - res.proteinsPassed)) / totalDBProteins
+	var pValue = countFisher(totalProteins, m, expSpec, expNon)
+	fmt.Println(strconv.FormatFloat(pValue, 'E', -1, 32))
 	//fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
 	//fmt.Println("Finish")
+}
+
+func countFisher(totalProteinsFromFile int, specieProteinsFromFile int, expSpec int, expNon int) float64 {
+	var pValue = fisher.FisherExactTest(totalProteinsFromFile, specieProteinsFromFile, expSpec, expNon)
+	return pValue
 }
 
 func containsString(s []string, searchterm string) bool {
@@ -438,4 +451,22 @@ func parseTSV(fileName string) map[string][]string {
 func getMD5Hash(text string) string {
 	hash := md5.Sum([]byte(text))
 	return hex.EncodeToString(hash[:])
+}
+
+func countDBProteins(db *sql.DB) int {
+	sqlStatement := "select count(id) as proteinsCount from ProteinHashed"
+	stmt, err := db.Prepare(sqlStatement)
+	checkError(err)
+	defer stmt.Close()
+	tx, err := db.Begin()
+	checkError(err)
+	var proteinsCount int
+	err = tx.Stmt(stmt).QueryRow().Scan(&proteinsCount)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		tx.Rollback()
+		os.Exit(1)
+	}
+	tx.Commit()
+	return proteinsCount
 }
