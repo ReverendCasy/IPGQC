@@ -66,7 +66,7 @@ func main() {
 	proteinsCheckFile := *proteinsCheck
 	createOnlyDB := *onlyDB
 	db := InitDB(dbName)
-	defer db.Close()
+	defer db.Close() // the block with creating table should be refactored into another function and run as a special mode
 	createTables(db)
 	if checkProteinNotExists(db) {
 		//stats_file := "test_stats.tsv"
@@ -94,24 +94,24 @@ func main() {
 	checkError(err)
 	var totalProteins = len(searchingProteinsHashes)
 
-	var res ReturningResult
-	species, proteinsPassed := searchProtein(db, searchingProteinsHashes)
+	var res ReturningResult                                               // the same. The block with per species stats should be moved to another function.
+	species, proteinsPassed := searchProtein(db, searchingProteinsHashes) // why variable name is 'species'
 	res.proteinsPassed = proteinsPassed
 	//species := searchSpeciesWithProtein(db, protein)
 	//res.proteinsPassed = cap(searchingProteinsHashes) / 2
 	var proteinsDB []int
 	var speciesCount []SpeciesCount
-	for _, specie := range species {
-		if !containsInt(proteinsDB, specie.ipgid) {
+	for _, specie := range species { // Why the values are calculated not with SQL requests?
+		if !containsInt(proteinsDB, specie.ipgid) { // The most inefficient way to build this array
 			proteinsDB = append(proteinsDB, specie.ipgid)
 		}
-		if !containsSpecie(speciesCount, specie.specie) {
+		if !containsSpecie(speciesCount, specie.specie) { // Very inefficient
 			var specieNew SpeciesCount
 			specieNew.qty = 1
 			specieNew.name = specie.specie
 			speciesCount = append(speciesCount, specieNew)
 		} else {
-			for i := 0; i < len(speciesCount); i++ {
+			for i := 0; i < len(speciesCount); i++ { // Seriously? Double the number of iterations?
 				if speciesCount[i].name == specie.specie {
 					speciesCount[i].qty = speciesCount[i].qty + 1
 				}
@@ -138,17 +138,19 @@ func main() {
 		fmt.Println(s.name + "	(" + strconv.Itoa(s.qty) + ")")
 	}
 	var totalDBProteins = countDBProteins(db)
-	m := totalProteins - res.proteinsPassed
-	var expSpec = (totalProteins * res.proteinsPassed) / totalDBProteins
+	m := totalProteins - res.proteinsPassed                              // m should be proteinPassed - proteins attributed to the species
+	var expSpec = (totalProteins * res.proteinsPassed) / totalDBProteins // should be calculated for each species as expected number of
+	// proteins attributed to the species
 	var expNon = (totalProteins * (totalProteins - res.proteinsPassed)) / totalDBProteins
-	var pValue = countFisher(totalProteins, m, expSpec, expNon)
+	var pValue = countFisher(totalProteins, m, expSpec, expNon) // Fisher test should be run for each possible species,
+	// instead of totalProteins should be proteins in the assembly, attributed to the species
 	fmt.Println(strconv.FormatFloat(pValue, 'E', -1, 32))
 	//fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
 	//fmt.Println("Finish")
 }
 
 func countFisher(totalProteinsFromFile int, specieProteinsFromFile int, expSpec int, expNon int) float64 {
-	var pValue = fisher.FisherExactTest(totalProteinsFromFile, specieProteinsFromFile, expSpec, expNon)
+	var pValue, _, _, _ = fisher.FisherExactTest(totalProteinsFromFile, specieProteinsFromFile, expSpec, expNon)
 	return pValue
 }
 
@@ -189,7 +191,7 @@ func searchProtein(db *sql.DB, hashes <-chan *SeqHash) ([]SearchResult, int) {
 		"from ProteinHashed as phd " +
 		"inner join ProteinHashedSpecies as phs on phd.id = phs.ProteinHashed " +
 		"inner join Species as ss on phs.Species = ss.id " +
-		"where phd.Hash in (" + searchingProteinString + ")"
+		"where phd.Hash in (" + searchingProteinString + ")" // this's a way for SQL injections?
 
 	stmt, err := db.Prepare(sqlStatement)
 	rows, err := stmt.Query()
@@ -207,7 +209,7 @@ func searchProtein(db *sql.DB, hashes <-chan *SeqHash) ([]SearchResult, int) {
 		var r SearchResult
 		r.ipgid = ipgid
 		r.specie = name
-		res = append(res, r)
+		res = append(res, r) // should be returned through channel
 	}
 	return res, seqHashCount
 }
